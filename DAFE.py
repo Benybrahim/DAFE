@@ -2,10 +2,12 @@
 Implementation of DAFE Network paper:
 http://openaccess.thecvf.com/content_ICCVW_2019/papers/CVFAD/Chen_Improving_Fashion_Landmark_Detection_by_Dual_Attention_Feature_Enhancement_ICCVW_2019_paper.pdf
 """
+
 from tensorflow.keras.applications import ResNet50V2
 import tensorflow as tf
 
 layers = tf.keras.layers
+
 
 def DAFE(input_shape, n_heatmaps):
 
@@ -90,24 +92,46 @@ def estimate_keypoints(heatmaps, input_shape):
     height, width, _ = input_shape
     _, heatmap_height, heatmap_width, number_kp = heatmaps.shape
 
-    heatmaps = tf.reshape(heatmaps,
-                          (-1, heatmap_height*heatmap_width , number_kp))
-    idx_max = tf.argmax(heatmaps, axis=1)
+    #heatmaps = tf.reshape(heatmaps,
+    #                      (-1, heatmap_height*heatmap_width , number_kp))
 
-    x = idx_max // width
-    y = idx_max % height
+    print(heatmaps)
+    #idx_max = tf.argmax(heatmaps, axis=1)
+
+
+    idx_max = argmax(heatmaps)
+    print(idx_max)
+    x = tf.gather(idx_max, indices=2, axis=1)
+    y = tf.gather(idx_max, indices=1, axis=1)
+
+    print(x)
+    print(y)
+
+
+
+    #x = idx_max // width
+    #y = idx_max % height
 
     # re-scale keypoints to same input size
     x_scaled = x * (width // heatmap_width)
     y_scaled = y * (height // heatmap_height)
 
+    print(x_scaled)
+    print(y_scaled)
+
     # [[x1, x2, x3, ...], [y1, y2, y3, ...]]
-    keypoints = tf.stack((x_scaled, y_scaled), axis=2)
+    keypoints =  tf.stack((x_scaled, y_scaled), axis=1)
 
     # [x1, y1, x2, y2, ...]
     keypoints = tf.reshape(keypoints, (-1, 2 * number_kp))
 
-    return tf.cast(keypoints, tf.float16)
+    return keypoints
+
+
+def argmax(x):
+    x_max = tf.reduce_max(x, axis=(1, 2), keepdims=True)
+    print(x_max)
+    return tf.where(x_max == x)
 
 
 if __name__=='__main__':
