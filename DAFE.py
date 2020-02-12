@@ -92,32 +92,16 @@ def estimate_keypoints(heatmaps, input_shape):
     height, width, _ = input_shape
     _, heatmap_height, heatmap_width, number_kp = heatmaps.shape
 
-    #heatmaps = tf.reshape(heatmaps,
-    #                      (-1, heatmap_height*heatmap_width , number_kp))
+    # argmax (using tf.argmax directly is not pratical and not derivable)
+    heatmaps_max = tf.reduce_max(heatmaps, axis=(1, 2), keepdims=True)
+    idx_max = tf.where(heatmaps_max == heatmaps, heatmaps_max, heatmaps)
 
-    print(heatmaps)
-    #idx_max = tf.argmax(heatmaps, axis=1)
-
-
-    idx_max = argmax(heatmaps)
-    print(idx_max)
     x = tf.gather(idx_max, indices=2, axis=1)
     y = tf.gather(idx_max, indices=1, axis=1)
-
-    print(x)
-    print(y)
-
-
-
-    #x = idx_max // width
-    #y = idx_max % height
 
     # re-scale keypoints to same input size
     x_scaled = x * (width // heatmap_width)
     y_scaled = y * (height // heatmap_height)
-
-    print(x_scaled)
-    print(y_scaled)
 
     # [[x1, x2, x3, ...], [y1, y2, y3, ...]]
     keypoints =  tf.stack((x_scaled, y_scaled), axis=1)
@@ -128,13 +112,6 @@ def estimate_keypoints(heatmaps, input_shape):
     return keypoints
 
 
-def argmax(x):
-    x_max = tf.reduce_max(x, axis=(1, 2), keepdims=True)
-    print(x_max)
-    return tf.where(x_max == x)
-
-
 if __name__=='__main__':
     model = DAFE((320, 320, 3), n_heatmaps=25)
-
     print(model.summary())
