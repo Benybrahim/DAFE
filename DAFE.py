@@ -99,12 +99,15 @@ def estimate_keypoints(heatmaps, input_shape):
     x = tf.gather(idx_max, indices=2, axis=1)
     y = tf.gather(idx_max, indices=1, axis=1)
 
-    # re-scale keypoints to same input size
+    x = tf.reshape(x, (-1, number_kp))
+    y = tf.reshape(y, (-1, number_kp))
+
+    # re-scale keypoints to same input size scale
     x_scaled = x * (width // heatmap_width)
     y_scaled = y * (height // heatmap_height)
 
-    # [[x1, x2, x3, ...], [y1, y2, y3, ...]]
-    keypoints =  tf.stack((x_scaled, y_scaled), axis=1)
+    # [[x1, y1], [x2, y2], [x3, y3], ...]
+    keypoints = tf.stack((x_scaled, y_scaled), axis=2)
 
     # [x1, y1, x2, y2, ...]
     keypoints = tf.reshape(keypoints, (-1, 2 * number_kp))
