@@ -9,7 +9,7 @@ import tensorflow as tf
 layers = tf.keras.layers
 
 
-def DAFE(input_shape, n_heatmaps):
+def DAFE(input_shape, n_classes):
 
     # ResNet50 backbone (bottom-up)
     resnet = ResNet50V2(weights='imagenet', include_top=False,
@@ -28,18 +28,11 @@ def DAFE(input_shape, n_heatmaps):
     x = _CasBlock(256, name='cas2')(x)
 
     x = _SauBlock(64, name='sau3')([x, conv2])
-    x = _CasBlock(64, name='cas3')(x) # classes
+    x = _CasBlock(64, name='cas3')(x)
 
-    # RPN Head (Classifier)
-    x = layers.Conv2D(n_heatmaps, (3, 3), padding='same',
+    # Classifier
+    x = layers.Conv2D(n_classes, (1, 1), padding='same', activation='linear',
                       name='conv_classifier')(x)
-
-    x = layers.Conv2D(n_heatmaps, (1, 1), padding='same',
-                      name='heatmaps_predictor')(x)
-
-    # estimate keypoints
-    x = layers.Lambda(lambda x: estimate_keypoints(x, input_shape),
-                      name='kp_estimator')(x)
 
     return tf.keras.models.Model(inputs=resnet.input, outputs=x, name='dafe')
 
@@ -50,23 +43,27 @@ class _SauBlock(layers.Layer):
     """
     def __init__(self, filters, name='', **kwargs):
         super(_SauBlock, self).__init__(name=name, **kwargs)
+        self.conv = layers.Conv2D(filters, (1, 1), padding='same',
+                                  name=name + '_conv')
         self.conv_tr = layers.Conv2DTranspose(filters, (1, 1), strides=(2, 2),
                                               padding='same',
                                               name=name + '_conv_tr')
-        self.conv = layers.Conv2D(filters, (1, 1), padding='same',
-                                  name=name + '_conv')
         self.conv_up = layers.UpSampling2D((2, 2), name=name + '_conv_up')
 
     def call(self, inputs):
         x, y = inputs
+
         sam = self.conv(x)
         sam = tf.nn.sigmoid(sam)
         sam = self.conv_up(sam)
+
         x_conv_tr = self.conv_tr(x)
+        x_conv_tr = tf.nn.relu(x_conv_tr)
+
         return x_conv_tr + (sam * y)
 
 
-class _CasBlock(tf.keras.Model):
+class _CasBlock(layers.Layer):
     """Channel wise attentive selection block
     cam: channel-wise attention matrix
     """
@@ -80,41 +77,20 @@ class _CasBlock(tf.keras.Model):
 
     def call(self, inputs):
         x = inputs
-        x_global = self.global_pooling(x)
-        x_global = tf.reshape(x_global, shape=(-1, 1, 1, x_global.shape[1]))
-        cam = self.conv1(x_global)
+
+        cam = self.global_pooling(x)
+        cam = tf.reshape(cam, shape=(-1, 1, 1, cam.shape[1]))
+        cam = self.conv1(cam)
         cam = tf.nn.relu(cam)
         cam = self.conv2(cam)
+        cam = tf.nn.relu(cam)
+
         return x * cam
 
 
-def estimate_keypoints(heatmaps, input_shape):
-    height, width, _ = input_shape
-    _, heatmap_height, heatmap_width, number_kp = heatmaps.shape
-
-    # argmax (using tf.argmax directly is not pratical and not derivable)
-    heatmaps_max = tf.reduce_max(heatmaps, axis=(1, 2), keepdims=True)
-    idx_max = tf.where(heatmaps_max == heatmaps, heatmaps_max, heatmaps)
-
-    x = tf.gather(idx_max, indices=2, axis=1)
-    y = tf.gather(idx_max, indices=1, axis=1)
-
-    x = tf.reshape(x, (-1, number_kp))
-    y = tf.reshape(y, (-1, number_kp))
-
-    # re-scale keypoints to same input size scale
-    x_scaled = x * (width // heatmap_width)
-    y_scaled = y * (height // heatmap_height)
-
-    # [[x1, y1], [x2, y2], [x3, y3], ...]
-    keypoints = tf.stack((x_scaled, y_scaled), axis=2)
-
-    # [x1, y1, x2, y2, ...]
-    keypoints = tf.reshape(keypoints, (-1, 2 * number_kp))
-
-    return keypoints
-
 
 if __name__=='__main__':
-    model = DAFE((320, 320, 3), n_heatmaps=25)
+    # test
+    model = DAFE((320, 320, 3), n_classes=25)
     print(model.summary())
+
