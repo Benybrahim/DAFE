@@ -22,13 +22,13 @@ def DAFE(input_shape, n_classes):
 
     # DAFE blocks (top-down)
     x = _SauBlock(512, name='sau1')([conv5, conv4])
-    x = _CasBlock(512, name='cas1')(x)
+    x = _CasBlock([256, 512], name='cas1')(x)
 
     x = _SauBlock(256, name='sau2')([x, conv3])
-    x = _CasBlock(256, name='cas2')(x)
+    x = _CasBlock([64, 256], name='cas2')(x)
 
     x = _SauBlock(64, name='sau3')([x, conv2])
-    x = _CasBlock(64, name='cas3')(x)
+    x = _CasBlock([32, 64], name='cas3')(x)
 
     # Classifier
     x = layers.Conv2D(n_classes, (1, 1), padding='same', activation='linear',
@@ -49,6 +49,7 @@ class _SauBlock(layers.Layer):
                                               padding='same',
                                               name=name + '_conv_tr')
         self.conv_up = layers.UpSampling2D((2, 2), name=name + '_conv_up')
+        self.batch_norm = layers.BatchNormalization(name=name + '_norm')
 
     def call(self, inputs):
         x, y = inputs
@@ -56,6 +57,7 @@ class _SauBlock(layers.Layer):
         sam = self.conv(x)
         sam = tf.nn.sigmoid(sam)
         sam = self.conv_up(sam)
+        sam = self.batch_norm(sam)
 
         x_conv_tr = self.conv_tr(x)
         x_conv_tr = tf.nn.relu(x_conv_tr)
@@ -70,9 +72,9 @@ class _CasBlock(layers.Layer):
     def __init__(self, filters, name='', **kwargs):
         super(_CasBlock, self).__init__(name=name, **kwargs)
         self.global_pooling = layers.GlobalAveragePooling2D()
-        self.conv1 = layers.Conv2D(filters, (1, 1), name=name+'_conv1',
+        self.conv1 = layers.Conv2D(filters[0], (1, 1), name=name+'_conv1',
                                    padding='same')
-        self.conv2 = layers.Conv2D(filters, (1, 1), name=name+'_conv2',
+        self.conv2 = layers.Conv2D(filters[1], (1, 1), name=name+'_conv2',
                                    padding='same')
 
     def call(self, inputs):
