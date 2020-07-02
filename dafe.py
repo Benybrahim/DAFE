@@ -23,12 +23,15 @@ def DAFE(input_shape, n_classes):
     # DAFE blocks (top-down)
     x = sau_block([conv5, conv4], 512, name='sau1')
     x = cas_block(x, [256, 512], name='cas1')
+    x = layers.Add(name='dafe1_out')([x, conv4])
 
     x = sau_block([x, conv3], 256, name='sau2')
     x = cas_block(x, [64, 256], name='cas2')
+    x = layers.Add(name='dafe2_out')([x, conv3])
 
     x = sau_block([x, conv2], 64, name='sau3')
     x = cas_block(x, [32, 64], name='cas3')
+    x = layers.Add(name='dafe3_out')([x, conv2])
 
     # Classifier
     x = layers.Conv2D(n_classes, (1, 1), padding='same', activation='linear',
@@ -43,14 +46,17 @@ def sau_block(inputs, filters, name):
     """
     x, y = inputs
 
+    x_conv_tr = layers.Conv2DTranspose(filters, 1, 2, padding='same',
+                               activation='relu', name=f'{name}_conv_tr')(x)
+
     sam = layers.Conv2D(filters, 1, padding='same', name=f'{name}_conv')(x)
     sam = layers.Activation('sigmoid', name=f'{name}_sigmoid')(sam)
     sam = layers.UpSampling2D(2, name=f'{name}_conv_up',)(sam)
-    #sam = layers.BatchNormalization(name=f'{name}_norm')(sam)
-    x_conv_tr = layers.Conv2DTranspose(filters, 1, 2, padding='same',
-                                       activation='relu',
-                                       name=f'{name}_conv_tr')(x)
-    return x_conv_tr + (sam * y)
+    sam = layers.BatchNormalization(name=f'{name}_norm')(sam)
+    y = layers.Multiply(name=f'{name}_sam_out')([sam, y])
+
+    output = layers.Add(name=f'{name}_out')([x_conv_tr, y])
+    return output
 
 def cas_block(inputs, filters, name):
     """Channel wise attentive selection block
@@ -64,7 +70,8 @@ def cas_block(inputs, filters, name):
     cam = layers.Activation('relu', name=f'{name}_relu')(cam)
     cam = layers.Conv2D(filters[1], 1, padding='same', name=f'{name}_conv2')(cam)
 
-    return x * cam
+    output = layers.Multiply(name=f'{name}_out')([x, cam])
+    return output
 
 
 if __name__=='__main__':
