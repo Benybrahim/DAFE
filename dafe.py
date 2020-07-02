@@ -64,7 +64,7 @@ def cas_block(inputs, filters, name):
     """
     x = inputs
 
-    cam = layers.GlobalAveragePooling2D()(x)
+    cam = layers.GlobalAveragePooling2D(name=f'{name}_pool')(x)
     cam = layers.Reshape(target_shape=(1, 1, cam.shape[1]), name=f'{name}_reshape')(cam)
     cam = layers.Conv2D(filters[0], 1, padding='same', name=f'{name}_conv1')(cam)
     cam = layers.Activation('relu', name=f'{name}_relu')(cam)
